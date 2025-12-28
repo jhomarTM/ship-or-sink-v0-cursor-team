@@ -27,6 +27,7 @@ export const books = pgTable("books", {
   id: uuid("id").defaultRandom().primaryKey(),
   title: varchar("title", { length: 500 }).notNull(),
   originalPdfUrl: text("original_pdf_url").notNull(),
+  markdownUrl: text("markdown_url"),
   status: bookStatusEnum("status").default("pending").notNull(),
   totalChapters: integer("total_chapters").default(0).notNull(),
   processedChapters: integer("processed_chapters").default(0).notNull(),

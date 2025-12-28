@@ -1,7 +1,6 @@
 import { task, logger } from "@trigger.dev/sdk/v3";
 import { db, books, chapters } from "@/db";
 import { eq } from "drizzle-orm";
-import { PDFParse } from "pdf-parse";
 import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
@@ -9,7 +8,7 @@ import { processChapter } from "./process-chapter";
 
 export interface ExtractChaptersPayload {
   bookId: string;
-  pdfUrl: string;
+  markdownUrl: string;
 }
 
 const chapterSchema = z.object({
@@ -25,34 +24,29 @@ export const extractChapters = task({
   id: "extract-chapters",
   maxDuration: 600,
   run: async (payload: ExtractChaptersPayload) => {
-    const { bookId, pdfUrl } = payload;
+    const { bookId, markdownUrl } = payload;
 
-    logger.info("Extracting chapters from PDF", { bookId, pdfUrl });
+    logger.info("Extracting chapters from markdown", { bookId, markdownUrl });
 
-    const response = await fetch(pdfUrl);
-    const arrayBuffer = await response.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const response = await fetch(markdownUrl);
+    const markdown = await response.text();
 
-    const parser = new PDFParse({ data: buffer });
-    const textResult = await parser.getText();
-    const fullText = textResult.text;
-    await parser.destroy();
-
-    logger.info("PDF text extracted", {
+    logger.info("Markdown fetched", {
       bookId,
-      textLength: fullText.length,
+      markdownLength: markdown.length,
     });
 
     const { object } = await generateObject({
       model: openai("gpt-4o-mini"),
       schema: chapterSchema,
-      prompt: `Analyze this book text and split it into logical chapters. 
+      prompt: `Analyze this book content in markdown format and split it into logical chapters.
 Each chapter should have a clear title and its content.
 If no explicit chapters exist, create logical sections based on topic changes.
 Limit to maximum 10 chapters, combining smaller sections if needed.
+Preserve the markdown formatting in the content.
 
-Text:
-${fullText.substring(0, 100000)}`,
+Markdown Content:
+${markdown.substring(0, 100000)}`,
     });
 
     const extractedChapters = object.chapters;

@@ -1,6 +1,7 @@
 import { task, logger } from "@trigger.dev/sdk/v3";
 import { db, books } from "@/db";
 import { eq } from "drizzle-orm";
+import { parsePdf } from "./parse-pdf";
 import { extractChapters } from "./extract-chapters";
 
 export interface ProcessPdfPayload {
@@ -22,9 +23,25 @@ export const processPdf = task({
       .where(eq(books.id, bookId));
 
     try {
-      await extractChapters.triggerAndWait({
+      // Step 1: Parse PDF with LlamaCloud and store markdown
+      const parseResult = await parsePdf.triggerAndWait({
         bookId,
         pdfUrl,
+      });
+
+      if (!parseResult.ok) {
+        throw new Error("PDF parsing failed");
+      }
+
+      logger.info("PDF parsed, extracting chapters", {
+        bookId,
+        markdownUrl: parseResult.output.markdownUrl,
+      });
+
+      // Step 2: Extract chapters from markdown
+      await extractChapters.triggerAndWait({
+        bookId,
+        markdownUrl: parseResult.output.markdownUrl,
       });
 
       logger.info("PDF processing completed", { bookId });
@@ -42,4 +59,3 @@ export const processPdf = task({
     }
   },
 });
-
